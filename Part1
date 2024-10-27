@@ -1,0 +1,75 @@
+#file names, which are located in the same jupyter folder 
+file_23_and_me = "23andme_v5_hg19_ref.txt.gz"
+file_pharm = "var_drug_ann.tsv"
+
+#read and process the .gz 23&me file
+#opens compact files
+import gzip
+
+def load_23andme_data(filepath):
+    data_23andme = {}
+    #open file as text file, allows for line processing
+    with gzip.open(filepath, 'rt') as file:
+        for line in file:
+            #skip header lines
+            if line.startswith('#'):
+                continue
+            #create required columns based on file format    
+            columns = line.strip().split('\t')
+            dbSNP_ID = columns[2]
+            allele = columns[3]
+            #stores dbSNP(rsID) and allele for easy lookup
+            data_23andme[dbSNP_ID] = allele
+    return data_23andme
+
+#put newly formatted data in dictionary
+data_23andme = load_23andme_data(file_23_and_me)
+
+#Read and process Pharm data skipping bad line @ 5147
+def load_pharm_data(filepath, error_line):
+    data_pharm = []
+    #uses standard character encoding for proper reading of special characters
+    with open(filepath, 'r', encoding= 'utf-8') as file:
+        # goes through each line in file assigning index and line content
+       #start at 1 to make sure line matches fie line
+        for i, line in enumerate(file, start = 1):
+            if i == error_line:
+            #skip bad line    
+                continue 
+            columns = line.strip().split('\t')
+            entry = {
+                "dbSNP_ID": columns[1],
+                "GENE_SYMBOL": columns[2],
+                "DRUG_NAME": columns[3],
+                "PMID": columns[4],
+                "PHENOTYPE_CATEGORY": columns[5],
+                "SIGNIFIGANCE": columns[6],
+                "NOTES": columns[7],
+                "SENTENCE": columns[8],
+                "ALLELE_PharmGKB": columns[9]
+            }
+            data_pharm.append(entry)
+    return data_pharm
+
+#load pharm data into dictionary skipping bad line
+data_pharm = load_pharm_data(file_pharm, error_line=5147)
+
+#merge 23andme with pharm data based on dbSNP_ID
+merge_data = []
+for entry in data_pharm:
+    dbSNP_ID = entry["dbSNP_ID"]
+    if dbSNP_ID in data_23andme:
+        entry["ALLELE_23andme"] = data_23andme[dbSNP_ID]
+        merge_data.append(entry)
+
+#put merged data into a new file to work with in future steps
+working_file = "merged_23andme_pharmGKB.tsv"
+with open(working_file, 'w') as work_file:
+    #column labels
+    work_file.write("dbSNP_ID\tGENE_SYMBOL\tDRUG_NAME\tPMID\tPHENOTYPE_CATEGORY\tSIGNIFIGANCE\tNOTES\tSENTENCE\tALLELE_PharmGKB\tALLELE_23andme\n")
+    #input the merged data
+    for entry in merge_data:
+        row = f"{entry['dbSNP_ID']}\t{entry['GENE_SYMBOL']}\t{entry['DRUG_NAME']}\t{entry['PMID']}\t{entry['PHENOTYPE_CATEGORY']}\t{entry['SIGNIFIGANCE']}\t{entry['NOTES']}\t{entry['SENTENCE']}\t{entry['ALLELE_PharmGKB']}\t{entry['ALLELE_23andme']}\n"
+        work_file.write(row)
+
+print("Merged data written to", working_file)
